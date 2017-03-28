@@ -16,6 +16,7 @@ def transform_grid_search_cv(estimator,X,y,param_grid,n_jobs=1,cv = None,data_tr
 	l = [np.zeros(shape=(0,len(set(y)))) for _ in range(len(params))]
 	if cv is None:
 		cv=StratifiedKFold(10,shuffle=True,random_state=123)
+	count = 0
 	for train,test in cv.split(X,y):
 		start_time = time.time()
 		test_index = np.append(test_index,test)
@@ -28,7 +29,12 @@ def transform_grid_search_cv(estimator,X,y,param_grid,n_jobs=1,cv = None,data_tr
 		out = Parallel(n_jobs=n_jobs)(delayed(_fit_predict)(clone(estimator),X_train,X_test,y_train,parameters) for parameters in params)
 		for i in range(len(l)):
 			l[i] = np.concatenate([l[i],out[i]])
-		print((time.time() - start_time)/60,' mins finished a fold')
+		count += 1
+		duration = time.time() - start_time
+		hours = int(duration/3600)
+		mins = int(duration % 3600 / 60)
+		seconds = duration % 60
+		print('fold {0} finished in {1} hours {2} mins {3} seconds'.format(count,hours,mins,seconds))
 	inverted_index = np.zeros(y.size,dtype=int)
 	inverted_index[test_index] = np.arange(y.size,dtype=int)
 	for i in range(len(l)):
