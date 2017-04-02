@@ -3,7 +3,7 @@ import numpy as np
 from TransformGridSearchCV import transform_grid_search_cv
 
 X = pd.read_csv('X.csv')
-y = pd.Series(np.ravel(pd.read_csv('y.csv')))
+y = pd.Series(np.ravel(pd.read_csv('y.csv',header=None)))
 #from sklearn.tree import DecisionTreeClassifier
 #from sklearn.ensemble import AdaBoostClassifier	
 #from sklearn.ensemble import RandomForestClassifier
