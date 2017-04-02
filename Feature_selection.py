@@ -8,8 +8,8 @@ print(X.shape)
 #from xgboost import XGBClassifier
 #clf = XGBClassifier(objective='softprob',n_estimators=500,max_depth=5,subsample=0.6,colsample_bytree=1,gamma=0.2,min_child_weight=3,reg_lambda=10)
 
-from sklearn.ensemble import ExtraTreeClassifier
-clf = ExtraTreeClassifier(n_estimators=666,n_jobs=-1)
+from sklearn.ensemble import ExtraTreesClassifier
+clf = ExtraTreesClassifier(n_estimators=666,n_jobs=-1)
 
 '''
 clf.fit(X,y)
