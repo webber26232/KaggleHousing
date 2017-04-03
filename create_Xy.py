@@ -43,24 +43,20 @@ del street_name, adrs, original_addresses, median, mahathen_dist
 
 #df[['listing_id','formatted_adrs','latitude','longitude']].to_csv('cood.csv',index=False)
 
-ifm_dict = {'convenience_store':[500],
-'home_goods_store':[500],
-'department_store':[2000],
+ifm_dict = {'convenience_store':[500],'home_goods_store':[500],'department_store':[2000],
 'bar':[500],'cafe':[500],'restaurant':[300],
-'train_station':[3000],'bus_station':[1000],#[1000,300],
-'subway_station':[2000],#[2000,500],
+'train_station':[3000],'bus_station':[1000,300],'subway_station':[2000,500],
 'laundry':[1000],'bank':[1000],'pharmacy':[1000],'church':[1000],'school':[500]}
-'''
-ifm_dict = {'convenience_store':[500],
-'restaurant':[300],
-'train_station':[3000],
-'subway_station':[2000],
-'pharmacy':[1000],
-'church':[1000],
-'school':[500]}'''
+
 
 ambs_features = [ifm+'_'+str(x) for ifm in ifm_dict for x in ifm_dict[ifm]]
 ambs = pd.read_csv('cood_with_ambs_patch.csv',encoding='gbk')
+
+ambs['transportation_sum'] = ambs[['subway_station_500','bus_station_300']].sum(axis=1)
+ambs['food_sum'] = ambs[['bar_500','cafe_500','restaurant_300']].sum(axis=1)
+ambs['convinience_sum'] = ambs[['laundry_1000','bank_1000','pharmacy_1000','church_1000','school_500']].sum(axis=1)
+ambs['store_sum'] = ambs[['home_goods_store_500','convenience_store_500']].sum(axis=1)
+ambs_features += ['food_sum','convinience_sum','transportation_sum','store_sum']
 
 df = df.merge(ambs[ambs_features+['listing_id']],how='left',left_on='listing_id',right_on='listing_id')
 del ambs, ifm_dict
@@ -95,7 +91,6 @@ df = create_area_code(df,2000,'area_small')
 df = create_area_code(df,20,'area_qlarge','depth')
 df = create_area_code(df,40,'area_qmedium','depth')
 df = create_area_code(df,60,'area_qsmall','depth')
-#df = create_area_code(df,50,'area_qsmall','depth')
 
 df['building_code'] = encode_by_count(df.building_id)
 df['adrs_code'] = encode_by_count(df.formatted_adrs)
@@ -156,11 +151,6 @@ category_features = ['building_code','street_code','adrs_code',
                      'area_large_code','area_medium_code','area_small_code',
                      'area_qlarge_code','area_qmedium_code','area_qsmall_code']
 
-metrics = ['price','price_per_bed','price_per_bath','price_per_room',
-           'bed_bath_rate','bed_bath_diff',
-           'num_features','num_photos','num_description_words',
-           'created_month','created_day','created_day_of_week','created_day_of_year']
-
 					 
 metrics = ['price','price_per_bed','price_per_bath','price_per_room',
            'bed_bath_rate','bed_bath_diff',
@@ -201,8 +191,6 @@ for met_to_cut in metrics:
         qlarge_group = pd.qcut(df[met_to_cut],[float(x)/5 for x in range(6)])
     #qsmall_group = pd.qcut(df[met_to_cut],[float(x)/10 for x in range(11)])
     for met_to_cal in metrics:
-        if met_to_cut == met_to_cal:
-            continue
         if met_to_cut in distance_features and met_to_cal in distance_features:
             continue
         num_cut_features.extend([met_to_cut+'_group_median_'+met_to_cal,met_to_cut+'_group_std_'+met_to_cal,'diff_from_'+met_to_cut+'_group_median_'+met_to_cal,'rank_of_'+met_to_cut+'_group_'+met_to_cal])

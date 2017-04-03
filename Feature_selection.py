@@ -21,8 +21,8 @@ from sklearn.feature_selection import RFECV
 from sklearn.model_selection import StratifiedKFold
 rfecv = RFECV(clf,cv=StratifiedKFold(10,shuffle=True,random_state=123),scoring='neg_log_loss',step=20,verbose=10)
 rfecv.fit(X,y)
-pd.DataFrame([X.columns,rfecv.support_,rfecv.ranking_]).T.to_csv('feature_selection_on_manual.csv')
-pd.DataFrame([range(1, len(rfecv.grid_scores_) + 1),rfecv.grid_scores_]).T.to_csv('feature_scores.csv')
+pd.DataFrame([X.columns,rfecv.support_,rfecv.ranking_]).T.to_csv('feature_selection_on_manual_et.csv')
+pd.DataFrame([range(1, len(rfecv.grid_scores_) + 1),rfecv.grid_scores_]).T.to_csv('feature_scores_et.csv')
 
 
 '''
