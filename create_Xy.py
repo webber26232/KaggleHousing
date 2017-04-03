@@ -56,7 +56,9 @@ ambs['transportation_sum'] = ambs[['subway_station_500','bus_station_300']].sum(
 ambs['food_sum'] = ambs[['bar_500','cafe_500','restaurant_300']].sum(axis=1)
 ambs['convinience_sum'] = ambs[['laundry_1000','bank_1000','pharmacy_1000','church_1000','school_500']].sum(axis=1)
 ambs['store_sum'] = ambs[['home_goods_store_500','convenience_store_500']].sum(axis=1)
-ambs_features += ['food_sum','convinience_sum','transportation_sum','store_sum']
+ambs['ambs_total'] = ambs[['food_sum','convinience_sum','store_sum','subway_station_2000','bus_station_1000']].sum(axis=1)
+
+ambs_features += ['food_sum','convinience_sum','transportation_sum','store_sum','ambs_total']
 
 df = df.merge(ambs[ambs_features+['listing_id']],how='left',left_on='listing_id',right_on='listing_id')
 del ambs, ifm_dict
@@ -143,9 +145,6 @@ features_to_use = ['bathrooms', 'bedrooms', 'rooms', 'latitude', 'longitude', 'p
                    'bed_bath_rate','bed_bath_diff',
                    'price_per_bath','price_per_bed','price_per_room']
 
-features_to_use.remove('created_month')
-features_to_use.remove('bed_bath_diff')
-features_to_use.remove('bed_bath_rate')
 
 category_features = ['building_code','street_code','adrs_code',
                      'area_large_code','area_medium_code','area_small_code',
@@ -157,13 +156,12 @@ metrics = ['price','price_per_bed','price_per_bath','price_per_room',
            'num_features','num_photos','num_description_words',
            'created_day_of_year'] + ambs_features + distance_features + adrs_features
 		   
-metrics.remove('bed_bath_diff')
 
 cat_features = []
 for cat in category_features + ['created_month','created_day','created_day_of_week', 'created_tens_of_month','bedrooms','bathrooms','rooms']:
     for met in metrics:
         if (met in ambs_features  or met in distance_features) and 'code' in cat:
-            break
+            continue
         #[cat+'_mean_'+met,'diff_from_'+cat+'_mean_'+met]
         #df[cat+'_mean_'+met] = df[cat].map(df.groupby(cat)[met].mean())
         #df['diff_from_'+cat+'_mean_'+met] = df[met] - df[cat+'_mean_'+met]
@@ -181,7 +179,7 @@ for cat in category_features + ['created_month','created_day','created_day_of_we
 num_cut_features = []
 
 for met_to_cut in metrics:
-    if met_to_cut in ambs_features:
+    if met_to_cut.endswith('00'):
         continue
     #large_group = pd.cut(df[met_to_cut],bins=5)
     #small_group = pd.cut(df[met_to_cut],bins=10)
@@ -191,8 +189,6 @@ for met_to_cut in metrics:
         qlarge_group = pd.qcut(df[met_to_cut],[float(x)/5 for x in range(6)])
     #qsmall_group = pd.qcut(df[met_to_cut],[float(x)/10 for x in range(11)])
     for met_to_cal in metrics:
-        if met_to_cut in distance_features and met_to_cal in distance_features:
-            continue
         num_cut_features.extend([met_to_cut+'_group_median_'+met_to_cal,met_to_cut+'_group_std_'+met_to_cal,'diff_from_'+met_to_cut+'_group_median_'+met_to_cal,'rank_of_'+met_to_cut+'_group_'+met_to_cal])
         gb_object = df.groupby(qlarge_group)[met_to_cal]
         df[met_to_cut+'_group_median_'+met_to_cal] = gb_object.transform(lambda x:x.median())
@@ -206,7 +202,7 @@ for met_to_cut in metrics:
 features = list(set(features_to_use + cat_features + num_cut_features + category_features + adrs_features + ambs_features + distance_features))
 X = df[features+['manager_id']]
 
-#y = df[df.interest_level.notnull()]['interest_level'].map({'high':0,'medium':1,'low':2})
+y = df[df.interest_level.notnull()]['interest_level'].map({'high':0,'medium':1,'low':2})
 
 X.to_csv('X.csv',index=False)
-#y.to_csv('y.csv',index=False)
+y.to_csv('y.csv',index=False)
