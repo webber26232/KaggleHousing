@@ -181,7 +181,7 @@ num_cut_features = []
 for met_to_cut in metrics:
     if met_to_cut.endswith('00'):
         continue
-    if met_to_cut.contains('quality'):
+    if 'quality' in met_to_cut:
         continue
     #large_group = pd.cut(df[met_to_cut],bins=5)
     #small_group = pd.cut(df[met_to_cut],bins=10)
