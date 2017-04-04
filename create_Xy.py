@@ -110,6 +110,9 @@ df['created_day'] = df['created'].dt.day
 df['created_day_of_year'] = df['created'].dt.dayofyear
 df['created_day_of_week'] = df['created'].dt.dayofweek
 df['created_tens_of_month'] = df['created_day'].apply(lambda x:int(str(x).zfill(2)[0])).replace(3,2)
+df['created_hour'] = df['created'].dt.hour
+df['created_quarter_of_day'] = (df['created_hour']/6).astype(int)
+
 
 df.bedrooms = df.bedrooms.replace(0,0.5)
 df.bathrooms = df.bathrooms.replace(0,0.5)
@@ -141,7 +144,7 @@ distance_features = ['dist_to_tmsq','dist_to_ctpk','dist_to_wtc','dist_to_bkc','
 
 features_to_use = ['bathrooms', 'bedrooms', 'rooms', 'latitude', 'longitude', 'price',
                    'num_photos', 'num_features', 'num_description_words',
-                   'created_day_of_year', 'created_month', 'created_day_of_week', 'created_day','created_tens_of_month',
+                   'created_hour','created_quarter_of_day','created_day','created_day_of_week','created_day_of_year', 'created_month','created_tens_of_month',
                    'bed_bath_rate','bed_bath_diff',
                    'price_per_bath','price_per_bed','price_per_room']
 
