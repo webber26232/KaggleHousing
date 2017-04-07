@@ -225,21 +225,30 @@ kept_features =  ['price_rank_area_qsmall_code_code',
 'adrs_quality_rank_building_code',
 'adrs_quality_rank_bedrooms',
 'adrs_quality_rank_rooms',
-'adrs_quality_rank_bathrooms']
+'adrs_quality_rank_bathrooms',
+'price_diff_adrs_code',
+'price_diff_bedrooms',
+'price_diff_created_month',
+'price_per_bed_diff_bedrooms',
+'dist_to_tmsq_diff_bathrooms',
+'dist_to_ap_diff_created_day_of_week',
+'dist_to_kt_diff_bathrooms']
+added_features = ['phone interview ','']
 best_score = 1
 feature_size = X.shape[1]
+skeep_flg = True
 for method in deviation_measurement + group_feature_measurement:
     for met in price_features + describe_features + distance_features + bed_bath_features + other_features:
         for cat in adrs_features + room_features + date_features: 
             name = met + '_' + method + '_' + cat
-            if name in kept_features:
-                new_feature = add_feature(X,cat,met,method)
-                new_feature.name = name
-                X = pd.concat([X,new_feature],axis=1)
-            if method == 'rank':
+            if name == 'price_per_room_median_building_code':
+                skeep_flg = False
+            if skeep_flg:
                 continue
             if cat in ['area_qsmall_code','adrs_code','building_code'] and met in distance_features:
                 continue
+            if best_score == 1:
+                best_score = cv_log_loss(X,y)
             new_feature = add_feature(X,cat,met,method)
             new_feature.name = name
             print('Start working on',new_feature.name)
