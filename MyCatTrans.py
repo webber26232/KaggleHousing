@@ -4,20 +4,23 @@ import pandas as pd
 import numpy as np
 
 class HCCTransformer(BaseEstimator, TransformerMixin):
-	def __init__(self, target_column, label_to_use=None, threshold='mean', fill_value=-1, coeficient=1, alpha=0.01, inplace=True):
+	def __init__(self, target_column, label_to_use=None, threshold='mean', coeficient=1, alpha=0.01, low_observations = 1 ,fill_value=-1, inplace=True):
 		if isinstance(target_column,Iterable) and not isinstance(target_column,str):
 			self.target_column = [x for x in target_column]
 		else:
 			self.target_column = target_column
+		if low_observations is not None and not (isinstance(fill_value,int)) and (not isinstance(fill_value,float)):
+			raise ValueError('low_observations must be None or a digit number')
+		if not (isinstance(fill_value,int)) and (not isinstance(fill_value,float)) and (fill_value != 'global'):
+			raise ValueError('fill_value must be "global" or a digit number')
 		self.label_to_use = label_to_use
 		self.threshold = threshold
 		self.coeficient = coeficient
 		self.alpha = alpha
 		self.pre_fix = ''
-		self.inplace = inplace
-		if not (isinstance(fill_value,int)) and (not isinstance(fill_value,float)) and (fill_value != 'global'):
-			raise ValueError('fill_value must be "global" or a digit number')
+		self.low_observations = low_observations
 		self.fill_value = fill_value
+		self.inplace = inplace
 		
 		if isinstance(self.target_column,Iterable) and not isinstance(self.target_column,str):
 			for i in range(len(self.target_column)):
@@ -93,8 +96,14 @@ class HCCTransformer(BaseEstimator, TransformerMixin):
 			weight = (ratio * lambda_value + (1 - lambda_value) * self.global_ratio[label])
 			randoms = (1 + (np.random.uniform(size=tmp.shape[0])-0.5)*self.alpha)
 			tmp[self.pre_fix+str(label)] = weight * randoms
-		self.mapping_ = tmp[[self.pre_fix+str(label) for label in self.label_to_use]]
 		
+		self.mapping_ = tmp[[self.pre_fix+str(label) for label in self.label_to_use]]
+		if self.low_observations is not None and fill_value != 'global':
+			if isinstance(self.low_observations,float):
+				observation_count = record_count.quantile(self.low_observations)
+			else:
+				observation_count = self.low_observations
+			self.mapping_.where(record_count>observation_count,fill_value)
 		return self
 
 	def transform(self, X):
@@ -102,7 +111,8 @@ class HCCTransformer(BaseEstimator, TransformerMixin):
 		X = X.merge(self.mapping_, how = 'left', left_on = self.target_column, right_index=True)
 		
 		if isinstance(self.fill_value, int) or isinstance(self.fill_value, float):
-			X.loc[:,[self.pre_fix+str(label) for label in self.label_to_use]].fillna(self.fill_value,inplace=True)
+			for label in self.label_to_use:
+				X[self.pre_fix+str(label)].fillna(self.fill_value,inplace=True)
 		else:
 			for label in self.label_to_use:
 				X[self.pre_fix+str(label)].fillna(self.global_ratio[label],inplace=True)
