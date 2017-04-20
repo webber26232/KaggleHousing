@@ -3,8 +3,8 @@ from collections import Iterable
 import pandas as pd
 import numpy as np
 
-class HHCTransformer(BaseEstimator, TransformerMixin):
-	def __init__(self, target_column, label_to_use=None, inplace=True, threshold='mean', fill_value=-1, coeficient=1, alpha=0.01):
+class HCCTransformer(BaseEstimator, TransformerMixin):
+	def __init__(self, target_column, label_to_use=None, threshold='mean', fill_value=-1, coeficient=1, alpha=0.01, inplace=True):
 		if isinstance(target_column,Iterable) and not isinstance(target_column,str):
 			self.target_column = [x for x in target_column]
 		else:
