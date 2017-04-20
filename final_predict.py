@@ -2,11 +2,10 @@
 import numpy as np
 train = pd.read_json('train.json')
 test = pd.read_json('test.json')
-df = pd.concat([train,test],axis=0)
+df = pd.concat([train,test],axis=0).reset_index()
 del train, test
-#df =train
 
-#drop boston building
+
 df.price = np.log(df.price)
 original_addresses = df.street_address.str.replace('\(.*?\)','').str.replace('&',' and ').str.strip().str.lower().str.replace(' +',' ')
 
@@ -19,7 +18,6 @@ adrs['building'] = adrs['building'].where(adrs['building']!=' ',adrs['formatted_
 
 median = df[['latitude','longitude']].median()
 mahathen_dist = (df[['latitude','longitude']] - median).abs().sum(axis=1)
-df['bad_codint_quality'] = (mahathen_dist>mahathen_dist.quantile(0.995))*1
 new_lat = df.latitude.where(mahathen_dist<=mahathen_dist.quantile(0.995),original_addresses.map(adrs.set_index('original_adrs')['lat']))
 new_lng = df.longitude.where(mahathen_dist<=mahathen_dist.quantile(0.995),original_addresses.map(adrs.set_index('original_adrs')['lng']))
 df.latitude = df.latitude.where(new_lat.isnull(),new_lat)
@@ -35,74 +33,61 @@ adrs['street_name'] = (adrs.premise.fillna('').str[:] + adrs.route.fillna('').st
 street_name = original_addresses.map(adrs.set_index('original_adrs')['street_name']).fillna(original_addresses)
 
 def encode_by_count(column):
-	count = column.value_counts()
-	return column.map(pd.Series(range(count.size),index=count.index))
+    count = column.value_counts()
+    return column.map(pd.Series(range(count.size),index=count.index))
 df['street_code'] = encode_by_count(street_name)
 del street_name, adrs, original_addresses, median, mahathen_dist
 
-#df[['listing_id','formatted_adrs','latitude','longitude']].to_csv('cood.csv',index=False)
-ifm_dict = {'convenience_store':[500],
-'home_goods_store':[500],
-'department_store':[2000],
-'bar':[500],'cafe':[500],'restaurant':[300],
-'train_station':[3000],'bus_station':[1000,300],
-'subway_station':[2000,500],
-'laundry':[1000],'bank':[1000],'pharmacy':[1000],'church':[1000],'school':[500]}
-
-ambs_features = [ifm+'_'+str(x) for ifm in ifm_dict for x in ifm_dict[ifm]]
-ambs = pd.read_csv('cood_with_ambs_patch.csv',encoding='gbk')
-
-df = df.merge(ambs[ambs_features+['listing_id']],how='left',left_on='listing_id',right_on='listing_id')
-del ambs, ifm_dict
 
 def create_area_code(frame,cut_size,target_column_prefix,method='width',keep='code'):
-	if target_column_prefix+'_code' in frame.columns:
-		frame = frame.drop(target_column_prefix+'_code',axis=1)
-	if target_column_prefix+'_count' in frame.columns:
-		frame = frame.drop(target_column_prefix+'_count',axis=1)
-	if method == 'width':
-		frame['lat_group'] = pd.cut(frame.latitude,bins=cut_size)
-		frame['lng_group'] = pd.cut(frame.longitude,bins=cut_size)
-	elif method == 'depth':
-		quantile_list = [float(x)/cut_size for x in range(cut_size+1)]
-		frame['lat_group'] = pd.qcut(frame.latitude,quantile_list)
-		frame['lng_group'] = pd.qcut(frame.longitude,quantile_list)
-	else:
-		raise ValueError('method should be width or depth')
-	area = frame.groupby(['lat_group','lng_group']).size().sort_values().reset_index().reset_index().set_index(['lat_group','lng_group']).rename(columns={'index':target_column_prefix+'_code',0:target_column_prefix+'_count'})
-	if keep == 'code':
-		return frame.merge(area,how='left',left_on=['lat_group','lng_group'],right_index=True).drop(['lat_group','lng_group',target_column_prefix+'_count'],axis=1)
-	elif keep == 'count':
-		return frame.merge(area,how='left',left_on=['lat_group','lng_group'],right_index=True).drop(['lat_group','lng_group',target_column_prefix+'_code'],axis=1)
-	elif keep == 'both':
-		return frame.merge(area,how='left',left_on=['lat_group','lng_group'],right_index=True).drop(['lat_group','lng_group'],axis=1)
-	else:
-		raise ValueError('keep should be code or count or both')
+    if target_column_prefix+'_code' in frame.columns:
+        frame = frame.drop(target_column_prefix+'_code',axis=1)
+    if target_column_prefix+'_count' in frame.columns:
+        frame = frame.drop(target_column_prefix+'_count',axis=1)
+    if method == 'width':
+        frame['lat_group'] = pd.cut(frame.latitude,bins=cut_size)
+        frame['lng_group'] = pd.cut(frame.longitude,bins=cut_size)
+    elif method == 'depth':
+        quantile_list = [float(x)/cut_size for x in range(cut_size+1)]
+        frame['lat_group'] = pd.qcut(frame.latitude,quantile_list)
+        frame['lng_group'] = pd.qcut(frame.longitude,quantile_list)
+    else:
+        raise ValueError('method should be width or depth')
+    area = frame.groupby(['lat_group','lng_group']).size().sort_values().reset_index().reset_index().set_index(['lat_group','lng_group']).rename(columns={'index':target_column_prefix+'_code',0:target_column_prefix+'_count'})
+    if keep == 'code':
+        return frame.merge(area,how='left',left_on=['lat_group','lng_group'],right_index=True).drop(['lat_group','lng_group',target_column_prefix+'_count'],axis=1)
+    elif keep == 'count':
+        return frame.merge(area,how='left',left_on=['lat_group','lng_group'],right_index=True).drop(['lat_group','lng_group',target_column_prefix+'_code'],axis=1)
+    elif keep == 'both':
+        return frame.merge(area,how='left',left_on=['lat_group','lng_group'],right_index=True).drop(['lat_group','lng_group'],axis=1)
+    else:
+        raise ValueError('keep should be code or count or both')
 	
-df = create_area_code(df,400,'area_large')
-df = create_area_code(df,1200,'area_medium')
-df = create_area_code(df,2000,'area_small')
-df = create_area_code(df,20,'area_qlarge','depth')
-df = create_area_code(df,40,'area_qmedium','depth')
-df = create_area_code(df,60,'area_qsmall','depth')
-
+df = create_area_code(df,50,'area_qsmall','depth')
 
 df['building_code'] = encode_by_count(df.building_id)
 df['adrs_code'] = encode_by_count(df.formatted_adrs)
 
-adrs_features = ['bad_codint_quality','adrs_quality']
+adrs_features = ['adrs_quality']
 
 df['num_photos'] = df['photos'].apply(len)
 df['num_features'] = df['features'].apply(len)
 df['num_description_words'] = df['description'].apply(lambda x: len(x.split(' ')))
+
 df['created'] = pd.to_datetime(df['created'])
 df['created_month'] = df['created'].dt.month
 df['created_day'] = df['created'].dt.day
 df['created_day_of_year'] = df['created'].dt.dayofyear
+df['created_day_of_week'] = df['created'].dt.dayofweek
+df['created_tens_of_month'] = df['created_day'].apply(lambda x:int(str(x).zfill(2)[0])).replace(3,2)
+df['created_hour'] = df['created'].dt.hour
+df['created_quarter_of_day'] = (df['created_hour']/6).astype(int)
 
-df.bedrooms = df.bedrooms.replace(0,0.8)
-df.bathrooms = df.bathrooms.replace(0,0.8)
+df.bedrooms = df.bedrooms.replace(0,0.5)
+df.bathrooms = df.bathrooms.replace(0,0.5)
 df['rooms'] = df['bedrooms'] + df['bathrooms']
+room_type_code = df.groupby(['bedrooms','bathrooms']).size().sort_values().reset_index().reset_index().set_index(['bedrooms','bathrooms']).rename(columns={'index':'room_type_code',0:'room_type_count'})
+df = df.merge(room_type_code.drop('room_type_count',axis=1),how='left',left_on=['bedrooms','bathrooms'],right_index=True)
 df['bed_bath_rate'] = df['bedrooms'] / df['bathrooms']
 df['bed_bath_diff'] = df['bedrooms'] - df['bathrooms']
 
@@ -111,104 +96,139 @@ df['price_per_bath'] = df['price'] / df['bathrooms']
 df['price_per_room'] = df['price'] / df['rooms']
 
 
-features_to_use = ['bathrooms', 'bedrooms', 'rooms', 'latitude', 'longitude', 'price',
-                   'num_photos', 'num_features', 'num_description_words',
-                   'created_day_of_year', 'created_month', 'created_day',
-                   'bed_bath_rate','bed_bath_diff',
-                   'price_per_bath','price_per_bed','price_per_room']
-
-features_to_use.remove('created_month')
-features_to_use.remove('bed_bath_diff')
-features_to_use.remove('bed_bath_rate')
-
-category_features = ['building_code','street_code','adrs_code','area_large_code','area_medium_code','area_small_code','area_qlarge_code','area_qmedium_code','area_qsmall_code']
-metrics = ['price','price_per_bed','price_per_bath','price_per_room',
-           'bed_bath_rate','bed_bath_diff',
-           'num_features','num_photos','num_description_words',
-           'created_month','created_day','created_day_of_year']
-		   
-metrics.remove('created_month')
-metrics.remove('bed_bath_diff')
-
-new_features = []
-for cat in category_features:
-	for met in metrics:
-		#[cat+'_mean_'+met,'diff_from_'+cat+'_mean_'+met]
-		#df[cat+'_mean_'+met] = df[cat].map(df.groupby(cat)[met].mean())
-		#df['diff_from_'+cat+'_mean_'+met] = df[met] - df[cat+'_mean_'+met]
-		
-		new_features.extend([cat+'_median_'+met,cat+'_std_'+met,'diff_from_'+cat+'_median_'+met,'rank_'+cat+'_'+met])
-		gb_object = df.groupby(cat)[met]
-		df[cat+'_median_'+met] = df[cat].map(gb_object.median())  
-		df[cat+'_std_'+met] = df[cat].map(gb_object.std()).fillna(0)
-		df['diff_from_'+cat+'_median_'+met] = df[met] - df[cat+'_median_'+met]
-		df['rank_'+cat+'_'+met] = gb_object.rank(method='average',pct=True)
-		
-
-	
-new_features = [x for x in new_features if not x.startswith('diff')] + [x for x in new_features if x.startswith('diff') and not x.endswith('bed_bath_rate')]
-
-from xgboost import XGBClassifier
-clf = XGBClassifier(objective='softprob',n_estimators=500,max_depth=5,subsample=0.6,colsample_bytree=0.6,gamma=0.2,min_child_weight=3,reg_lambda=10)
-
-
-#rfecv = RFECV(clf,cv=StratifiedKFold(10,shuffle=True,random_state=123),scoring='neg_log_loss',step=3,verbose=5)
-
-
 
 from geopy import distance
 time_square = [40.757888,-73.985613]
 center_park = [40.7789,-73.968384]
 world_trade_center = [40.711522,-74.013173]
 brooklyn_center = [40.714470,-73.961303]
+airport = [40.644953, -73.787114]
+king_theater = [40.645593, -73.958087]
 df['dist_to_tmsq'] = df[['latitude','longitude']].apply(lambda x:distance.vincenty(x,time_square).meters,axis=1)
 df['dist_to_ctpk'] = df[['latitude','longitude']].apply(lambda x:distance.vincenty(x,center_park).meters,axis=1)
 df['dist_to_wtc'] = df[['latitude','longitude']].apply(lambda x:distance.vincenty(x,world_trade_center).meters,axis=1)
 df['dist_to_bkc'] = df[['latitude','longitude']].apply(lambda x:distance.vincenty(x,brooklyn_center).meters,axis=1)
-distance_features = ['dist_to_tmsq','dist_to_ctpk','dist_to_wtc','dist_to_bkc']
+df['dist_to_ap'] = df[['latitude','longitude']].apply(lambda x:distance.vincenty(x,airport).meters,axis=1)
+df['dist_to_kt'] = df[['latitude','longitude']].apply(lambda x:distance.vincenty(x,king_theater).meters,axis=1)
+distance_features = ['dist_to_tmsq','dist_to_ctpk','dist_to_wtc','dist_to_bkc','dist_to_ap','dist_to_kt']
 
 
-features = features_to_use + new_features + category_features + adrs_features + ambs_features + distance_features
+
+
+features_to_use = ['bathrooms', 'bedrooms', 'rooms', 'latitude', 'longitude', 'price',
+                   'num_photos', 'num_features', 'num_description_words',
+                   'created_hour','created_quarter_of_day','created_day','created_day_of_week','created_day_of_year', 'created_month','created_tens_of_month',
+                   'bed_bath_rate','bed_bath_diff',
+                   'price_per_bath','price_per_bed','price_per_room']
+
+
+category_features = ['building_code','street_code','adrs_code','area_qsmall_code','room_type_code']
+
+features = features_to_use + category_features + adrs_features + distance_features
+X = df[features+['manager_id']]
+
+y = df['interest_level'][df.interest_level.notnull()].map({'high':0,'medium':1,'low':2})
+
+
+
+def add_feature(df,cat,met,method):
+    if method == 'rank':
+        asc_flg = 'price' not in met or ('dist' not in met)
+        return df.groupby(cat)[met].rank(method='average',pct=True,ascending=asc_flg)
+    elif method == 'diff':
+        return df[met] - df[cat].map(df.groupby(cat)[met].median())
+    elif method == 'median':
+        return df[cat].map(df.groupby(cat)[met].median())
+    elif method == 'std':
+        return df[cat].map(df.groupby(cat)[met].std()).fillna(0)
+
+room_features = ['room_type_code','bedrooms','rooms','bathrooms']#bed_bath
+adrs_features = ['area_qsmall_code','adrs_code','building_code','street_code'] #area_small_code
+
+date_features = ['created_month','created_day_of_week']#independent
+date_features_in_month = ['created_tens_of_month','created_day']
+date_features_in_day = ['created_quarter_of_day','created_hour']
+
+#numerical feature groups
+price_features = ['price','price_per_bed','price_per_room','price_per_bath']
+
+describe_features = ['num_features','num_description_words',                                      'num_photos']
+distance_features = ['dist_to_tmsq','dist_to_wtc','dist_to_bkc','dist_to_ap','dist_to_kt',      'dist_to_ctpk']
+
+bed_bath_features = ['bed_bath_rate','bed_bath_diff']
+other_features = ['created_day_of_year','adrs_quality']#independent
+
+#measure methods
+deviation_measurement = ['rank','diff']
+group_feature_measurement = ['median','std']
+
+kept_features =  ['price_rank_area_qsmall_code',
+'price_rank_bedrooms',
+'price_rank_rooms',
+'price_per_bed_rank_bedrooms',
+'price_per_bed_rank_rooms',
+'num_features_rank_area_qsmall_code',
+'num_features_rank_bedrooms',
+'num_features_rank_rooms',
+'num_photos_rank_created_month',
+'dist_to_tmsq_rank_bedrooms',
+'dist_to_tmsq_rank_rooms',
+'dist_to_tmsq_rank_created_tens_of_month',
+'dist_to_tmsq_rank_created_hour',
+'dist_to_ctpk_rank_created_month',
+'dist_to_wtc_rank_created_month',
+'dist_to_ap_rank_created_tens_of_month',
+'dist_to_kt_rank_created_day',
+'adrs_quality_rank_building_code',
+'adrs_quality_rank_bedrooms',
+'adrs_quality_rank_rooms',
+'adrs_quality_rank_bathrooms',
+'price_diff_adrs_code',
+'price_diff_bedrooms',
+'price_diff_created_month',
+'price_per_bed_diff_bedrooms',
+'dist_to_tmsq_diff_bathrooms',
+'dist_to_ap_diff_created_day_of_week',
+'dist_to_kt_diff_bathrooms']
+
+for method in deviation_measurement + group_feature_measurement:
+    for met in price_features + describe_features + distance_features + bed_bath_features + other_features:
+        for cat in adrs_features + room_features + date_features: 
+            name = met + '_' + method + '_' + cat
+            if name in kept_features:
+                new_feature = add_feature(X,cat,met,method).rename(name)
+                X = pd.concat([X,new_feature],axis=1)
+
+kept_cut_features = ['num_photos_rank_price_cat',
+'dist_to_tmsq_rank_price_cat',
+'num_photos_rank_price_per_bed_cat']               
+
+for price_met in price_features:
+    cat_name = price_met+'_cat'
+    for met in price_features + describe_features + distance_features + bed_bath_features + other_features:
+        name = met + '_rank_' + cat_name
+        if name in kept_cut_features:
+            price_cat = pd.qcut(X[price_met],[0,0.2,0.4,0.6,0.8,1]).rename(cat_name)
+            new_feature = add_feature(X,price_cat,met,'rank').rename(name)
+            X = pd.concat([X,new_feature],axis=1)
 
 from MyCatTrans import CategoricalTransformer
-transformer = CategoricalTransformer('manager_id',[0,1],18)
-X = df[features+['manager_id']]
-#X = df[features]
+transformer = CategoricalTransformer('manager_id',[0,1],20)
 
-y = df[df.interest_level.notnull()]['interest_level'].map({'high':0,'medium':1,'low':2})
+train_flg = df.interest_level.notnull()
 
-train = X[df.interest_level.notnull()]
-test = X[df.interest_level.isnull()]
+train_index = df[train_flg].index
+test_index = df[~train_flg].index
 
-train = transformer.fit_transform(train,y)
-test = transformer.transform(test)
+X_train = X.iloc[train_index]
+X_test = X.iloc[test_index]
 
-'''
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import MinMaxScaler
-X = MinMaxScaler().fit_transform(pd.concat([train,test],axis=0))
-pca = PCA(30)
-X = pca.fit_transform(X)
+X_train = transformer.fit_transform(X_train,y)
+X_test = transformer.transform(X_test)
 
-train = X[df.interest_level.notnull()]
-test = X[df.interest_level.isnull()]'''
+from xgboost import XGBClassifier
+clf = XGBClassifier(n_estimators=666, max_depth=4, min_child_weight=2.2, gamma=0.3, objective='softprob', subsample=0.6, colsample_bytree=0.6, reg_lambda=100.0)
+clf.fit(X_train,y)
+out = clf.predict_proba(X_test)
 
-listing_id = df[df.interest_level.isnull()]['listing_id']
-del df
-clf.fit(train,y)
-#pd.concat([pd.Series(clf.feature_importances_,name = 'importance'),pd.Series(train.columns,name='columne_name')],axis=1).to_csv('xgb_feature_importance.csv',index=False)
-del train,y
-out = clf.predict_proba(test)
-pd.DataFrame(out,columns=['high','medium','low'],index=listing_id).to_csv('result.csv')
-
-
-#rfecv.fit(X,y)
-#pd.DataFrame([X.columns,rfecv.support_,rfecv.ranking_]).to_csv('feature_selection.csv')
-#pd.DataFrame([range(1, len(rfecv.grid_scores_) + 1,3),rfecv.grid_scores_]).to_csv('feature_scores.csv')
-
-
-'''
-import nltk
-text = df.description.str[:]+' '+df.features.apply(lambda x:'. '.join(x)).str[:]
-tmp = text.str.replace('<[^>]+?>',' ').str.replace('w/',' ').str.replace('<a +website_redacted','').str.replace('[^a-zA-Z0-9,. ]+',' ').str.replace('\s{2,}','. ').str.replace('\.+','.').str.replace('^. ','').str.lower()'''
-
+pd.DataFrame(out,index = df.listing_id[test_index],columns=['high','medium','low']).to_csv('predict_04-10.csv')

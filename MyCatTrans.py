@@ -3,8 +3,8 @@ from collections import Iterable
 import pandas as pd
 import numpy as np
 
-class CategoricalTransformer(BaseEstimator, TransformerMixin):
-	def __init__(self, target_column, label_to_use=None, threshold='mean',coeficient=1,alpha=0.01):
+class HHCTransformer(BaseEstimator, TransformerMixin):
+	def __init__(self, target_column, label_to_use=None, threshold='mean', fill_value=-1, coeficient=1, alpha=0.01):
 		if isinstance(target_column,Iterable) and not isinstance(target_column,str):
 			self.target_column = [x for x in target_column]
 		else:
@@ -14,6 +14,9 @@ class CategoricalTransformer(BaseEstimator, TransformerMixin):
 		self.coeficient = coeficient
 		self.alpha = alpha
 		self.pre_fix = ''
+		if not (isinstance(fill_value,int)) and (not isinstance(fill_value,float)) and (fill_value != 'global'):
+			raise ValueError('fill_value must be "global" or a digit number')
+		self.fill_value = fill_value
 		
 		if isinstance(self.target_column,Iterable) and not isinstance(self.target_column,str):
 			for i in range(len(self.target_column)):
@@ -38,7 +41,7 @@ class CategoricalTransformer(BaseEstimator, TransformerMixin):
 			self.mapping_ = None
 			self.global_ratio = None
 
-	def fit(self, X,y):
+	def fit(self, X, y):
 		if not isinstance(y,pd.Series):
 			y = pd.Series(y)
 		
@@ -97,8 +100,11 @@ class CategoricalTransformer(BaseEstimator, TransformerMixin):
 		
 		X = X.merge(self.mapping_, how = 'left', left_on = self.target_column, right_index=True)
 		
-		for label in self.label_to_use:
-			X[self.pre_fix+str(label)].fillna(self.global_ratio[label],inplace=True)
+		if isinstance(self.fill_value, int) or isinstance(self.fill_value, float):
+			X.loc[:,[self.pre_fix+str(label) for label in self.label_to_use]].fillna(self.fill_value,inplace=True)
+		else:
+			for label in self.label_to_use:
+				X[self.pre_fix+str(label)].fillna(self.global_ratio[label],inplace=True)
 
 		if inplace:
 			if isinstance(self.target_column,Iterable) and not isinstance(self.target_column,str):
@@ -116,3 +122,26 @@ class CategoricalTransformer(BaseEstimator, TransformerMixin):
 				if self.target_column in X.columns:
 					X.drop(self.target_column,axis=1,inplace=True)
 		return X
+
+class CountEncoder(BaseEstimator, TransformerMixin):
+	def __init__(self,fill_value=None):
+		self.fill_value = fill_value
+	
+	def fit(self,y):
+		count = column.value_counts()
+		self.count_code = pd.Series(range(count.size),index=count.index)
+		return self
+	def transform(self,y):
+		code = y.map(self.count_code)
+		nulls = code.isnull()
+		if nulls.any():
+			if isinstance(self.fill_value, int):
+				return code.fillna(self.fill_value)
+			elif isinstance(self.fill_value, str) and self.fill_value == 'auto':
+				na_index = code[nulls].index
+				count = y.loc[na_index].value_counts()
+				na_count_code = -pd.Series(range(1,count.size+1),index=count.index)
+				return count.replace(na_count_code)
+		else:
+			return code
+		

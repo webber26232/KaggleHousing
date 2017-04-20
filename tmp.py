@@ -64,12 +64,6 @@ def create_area_code(frame,cut_size,target_column_prefix,method='width',keep='co
     else:
         raise ValueError('keep should be code or count or both')
 	
-'''df = create_area_code(df,400,'area_large')
-df = create_area_code(df,1200,'area_medium')
-df = create_area_code(df,2000,'area_small')
-df = create_area_code(df,20,'area_qlarge','depth')
-df = create_area_code(df,40,'area_qmedium','depth')
-df = create_area_code(df,60,'area_qsmall','depth')'''
 df = create_area_code(df,50,'area_qsmall','depth')
 
 df['building_code'] = encode_by_count(df.building_id)
@@ -93,6 +87,8 @@ df['created_quarter_of_day'] = (df['created_hour']/6).astype(int)
 df.bedrooms = df.bedrooms.replace(0,0.5)
 df.bathrooms = df.bathrooms.replace(0,0.5)
 df['rooms'] = df['bedrooms'] + df['bathrooms']
+room_type_code = df.groupby(['bedrooms','bathrooms']).size().sort_values().reset_index().reset_index().set_index(['bedrooms','bathrooms']).rename(columns={'index':'room_type_code',0:'room_type_count'})
+df = df.merge(room_type_code.drop('room_type_count',axis=1),how='left',left_on=['bedrooms','bathrooms'],right_index=True)
 df['bed_bath_rate'] = df['bedrooms'] / df['bathrooms']
 df['bed_bath_diff'] = df['bedrooms'] - df['bathrooms']
 
@@ -127,7 +123,7 @@ features_to_use = ['bathrooms', 'bedrooms', 'rooms', 'latitude', 'longitude', 'p
                    'price_per_bath','price_per_bed','price_per_room']
 
 
-category_features = ['building_code','street_code','adrs_code','area_qsmall_code']
+category_features = ['building_code','street_code','adrs_code','area_qsmall_code','room_type_code']
 
 features = features_to_use + category_features + adrs_features + distance_features
 X = df[features+['manager_id']]
@@ -144,24 +140,25 @@ from sklearn.metrics import log_loss
 from MyCatTrans import CategoricalTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedKFold
+estimator = RandomForestClassifier(n_estimators=666,random_state=123,min_samples_leaf=7,n_jobs=-1)
+transformer = CategoricalTransformer('manager_id',[0,1],18)
 
-def cv_log_loss(X,y):
+def cv_log_loss(estimator,X,y,cv=None,transformer=None):
     start_time = time.time()
     test_index = np.array([],dtype=int)
     prediction_encode = np.zeros((0,3))
     for train,test in StratifiedKFold(10,shuffle=True,random_state=123).split(X,y):
-        transformer = CategoricalTransformer('manager_id',[0,1],18)
-        clf = RandomForestClassifier(n_estimators=666,random_state=123,min_samples_leaf=7,n_jobs=-1)
-
+        
         test_index = np.append(test_index,test)
         X_train = X.iloc[train]
         X_test = X.iloc[test]
         y_train = y.iloc[train]
+        
         X_train = transformer.fit_transform(X_train,y_train)
         X_test = transformer.transform(X_test)  
 
-        clf.fit(X_train,y_train)
-        prediction_encode = np.concatenate([prediction_encode,clf.predict_proba(X_test)])
+        estimator.fit(X_train,y_train)
+        prediction_encode = np.concatenate([prediction_encode,estimator.predict_proba(X_test)])
 
     inverted_index = np.zeros(y.size,dtype=int)
     inverted_index[test_index] = np.arange(y.size,dtype=int)
@@ -170,11 +167,13 @@ def cv_log_loss(X,y):
     mins = int(duration % 3600 / 60)
     seconds = int(duration % 60)
     print('Test finished in {0} hours {1} mins {2} seconds'.format(hours,mins,seconds))
-    return log_loss(y,prediction_encode[inverted_index])
+    return log_loss(y,prediction_encode[inverted_index])     
 
-def add_feature(df,cat,met,method):
+
+def add_feature(df,cat,met,method='rank'):
     if method == 'rank':
-        return df.groupby(cat)[met].rank(method='average',pct=True,ascending=False)
+        asc_flg = 'price' not in met or ('dist' not in met)
+        return df.groupby(cat)[met].rank(method='average',pct=True,ascending=asc_flg)
     elif method == 'diff':
         return df[met] - df[cat].map(df.groupby(cat)[met].median())
     elif method == 'median':
@@ -184,7 +183,7 @@ def add_feature(df,cat,met,method):
     
     
     
-room_features = ['bedrooms','rooms','bathrooms']#bed_bath
+room_features = ['room_type_code','bedrooms','rooms','bathrooms']#bed_bath
 adrs_features = ['area_qsmall_code','adrs_code','building_code','street_code'] #area_small_code
 
 date_features = ['created_month','created_day_of_week']#independent
@@ -205,7 +204,7 @@ deviation_measurement = ['rank','diff']
 group_feature_measurement = ['median','std']#independent
 
 
-kept_features =  ['price_rank_area_qsmall_code_code',
+kept_features =  ['price_rank_area_qsmall_code',
 'price_rank_bedrooms',
 'price_rank_rooms',
 'price_per_bed_rank_bedrooms',
@@ -233,8 +232,8 @@ kept_features =  ['price_rank_area_qsmall_code_code',
 'dist_to_tmsq_diff_bathrooms',
 'dist_to_ap_diff_created_day_of_week',
 'dist_to_kt_diff_bathrooms']
-added_features = ['phone interview ','']
-best_score = 1
+
+'''best_score = 1
 feature_size = X.shape[1]
 skeep_flg = True
 for method in deviation_measurement + group_feature_measurement:
@@ -258,7 +257,46 @@ for method in deviation_measurement + group_feature_measurement:
                 X = pd.concat([X,new_feature],axis=1)
                 print(score)
                 print(X.shape[1] - feature_size,'features added')
-            print('')
-                
+            print('')      
 
-X.columns.to_series().to_csv('kept_features.csv',index=False)
+X.columns.to_series().to_csv('kept_features.csv',index=False)'''
+
+for method in deviation_measurement + group_feature_measurement:
+    for met in price_features + describe_features + distance_features + bed_bath_features + other_features:
+        for cat in adrs_features + room_features + date_features: 
+            name = met + '_' + method + '_' + cat
+            if name in kept_features:
+                new_feature = add_feature(X,cat,met,method).rename(name)
+                X = pd.concat([X,new_feature],axis=1)
+
+bed_dummy = pd.get_dummies(X.bedrooms,prefix='bedrooms')
+bath_dummy = pd.get_dummies(X.bathrooms,prefix='bathrooms')
+X = pd.concat([X,bed_dummy,bath_dummy],axis=1)
+
+from sklearn.feature_extraction.text import CountVectorizer
+tfidf = CountVectorizer(stop_words='english', max_features=50)
+f = features.apply(lambda x:', '.join(x)).str.lower()
+f_dummy = tfidf.fit_transform(f)
+tmp = pd.DataFrame(f_dummy.toarray())
+cv_log_loss(estimator,pd.concat([X,tmp],axis=1),y,transformer=transformer) #0.5561 -> 0.5521
+
+
+bed_rank = X.groupby(pd.qcut(X.price,[0,0.2,0.4,0.6,0.8,1]))['bedrooms'].rank(method='average',pct=True,ascending=False)
+cv_log_loss(estimator,pd.concat([X,tmp],axis=1),y,transformer=transformer)#
+
+best_score = 0.5561
+feature_size = X.shape[1]
+for price_met in price_features:
+    price_cat = pd.qcut(X[price_met],[0,0.2,0.4,0.6,0.8,1]).rename(price_met+'_cat')
+    for met in price_features + describe_features + distance_features + bed_bath_features + other_features:
+        name = met + '_rank_' + price_cat.name
+        new_feature = add_feature(X,price_cat,met,'rank').rename(name)
+        print('Start working on',new_feature.name)
+        score = cv_log_loss(estimator,pd.concat([X,new_feature],axis=1),y,transformer=transformer) 
+        if score < best_score:
+            print(score)
+            print(X.shape[1] - feature_size,'features added')
+            best_score = score
+            X = pd.concat([X,new_feature],axis=1)
+        print('')
+print(X.columns)
