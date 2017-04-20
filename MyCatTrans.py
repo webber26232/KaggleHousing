@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 class HHCTransformer(BaseEstimator, TransformerMixin):
-	def __init__(self, target_column, label_to_use=None, threshold='mean', fill_value=-1, coeficient=1, alpha=0.01):
+	def __init__(self, target_column, label_to_use=None, inplace=True, threshold='mean', fill_value=-1, coeficient=1, alpha=0.01):
 		if isinstance(target_column,Iterable) and not isinstance(target_column,str):
 			self.target_column = [x for x in target_column]
 		else:
@@ -14,6 +14,7 @@ class HHCTransformer(BaseEstimator, TransformerMixin):
 		self.coeficient = coeficient
 		self.alpha = alpha
 		self.pre_fix = ''
+		self.inplace = inplace
 		if not (isinstance(fill_value,int)) and (not isinstance(fill_value,float)) and (fill_value != 'global'):
 			raise ValueError('fill_value must be "global" or a digit number')
 		self.fill_value = fill_value
@@ -96,7 +97,7 @@ class HHCTransformer(BaseEstimator, TransformerMixin):
 		
 		return self
 
-	def transform(self, X, inplace=True):
+	def transform(self, X):
 		
 		X = X.merge(self.mapping_, how = 'left', left_on = self.target_column, right_index=True)
 		
@@ -106,7 +107,7 @@ class HHCTransformer(BaseEstimator, TransformerMixin):
 			for label in self.label_to_use:
 				X[self.pre_fix+str(label)].fillna(self.global_ratio[label],inplace=True)
 
-		if inplace:
+		if self.inplace:
 			if isinstance(self.target_column,Iterable) and not isinstance(self.target_column,str):
 				for column in self.target_column:
 					column_name = ''
@@ -128,7 +129,7 @@ class CountEncoder(BaseEstimator, TransformerMixin):
 		self.fill_value = fill_value
 	
 	def fit(self,y):
-		count = column.value_counts()
+		count = y.value_counts()
 		self.count_code = pd.Series(range(count.size),index=count.index)
 		return self
 	def transform(self,y):
