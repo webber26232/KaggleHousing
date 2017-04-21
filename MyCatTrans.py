@@ -98,12 +98,12 @@ class HCCTransformer(BaseEstimator, TransformerMixin):
 			tmp[self.pre_fix+str(label)] = weight * randoms
 		
 		self.mapping_ = tmp[[self.pre_fix+str(label) for label in self.label_to_use]]
-		if self.low_observations is not None and fill_value != 'global':
+		if self.low_observations is not None and self.fill_value != 'global':
 			if isinstance(self.low_observations,float):
 				observation_count = record_count.quantile(self.low_observations)
 			else:
 				observation_count = self.low_observations
-			self.mapping_.where(record_count>observation_count,fill_value)
+			self.mapping_.where(record_count>observation_count,self.fill_value)
 		return self
 
 	def transform(self, X):
