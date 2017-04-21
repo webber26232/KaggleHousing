@@ -103,7 +103,7 @@ class HCCTransformer(BaseEstimator, TransformerMixin):
 				observation_count = record_count.quantile(self.low_observations)
 			else:
 				observation_count = self.low_observations
-			self.mapping_.where(record_count>observation_count,self.fill_value)
+			self.mapping_.where(record_count>observation_count,self.fill_value,inplace=True)
 		return self
 
 	def transform(self, X):
