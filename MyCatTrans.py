@@ -165,7 +165,7 @@ def CV_basian_encoding(grouping_column,label_to_use,train,y,test=None,cv=None,in
         train[prefixed_labes[i]] = outputs[:,i]
     if test is not None:
         tmp = _get_posterior(train,grouping_column,y)
-        tmp[prefixed_labes] = tmp[label_to_use] / tmp.sum(axis=1)
+        tmp[prefixed_labes] = (tmp[label_to_use].T / tmp.sum(axis=1)).T
         test  = test.merge(tmp[prefixed_labes], how = 'left', left_on = grouping_column, right_index=True)
     return train, test
 
