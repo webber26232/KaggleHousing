@@ -2,7 +2,7 @@
 from collections import Iterable
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold, KFold
 
 class HCCTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, grouping_column, label_to_use=None, threshold='mean', coeficient=1, alpha=0.01, low_observations = 1 ,fill_value=-1, inplace=True):
@@ -144,29 +144,34 @@ def _get_posterior(X,grouping_column,y,extra_labels=[]):
     return tmp
 
 
-def CV_basian_encoding(grouping_column,label_to_use,train,y,test=None,cv=None,inplace=False):
+def CV_basian_encoding(grouping_column,label_to_use,train,y,test=None,fill_value=None,cv=None,inplace=False):
     if not isinstance(y,np.ndarray):
         y = np.array(y)
     if cv is None:
-        cv = KFold(n_splits=5, shuffle=True, random_state=2016)
+        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=2016)
     elif isinstance(cv,int):
-        cv = KFold(n_splits=cv, shuffle=True, random_state=2016)
+        cv = StratifiedKFold(n_splits=cv, shuffle=True, random_state=2016)
     pre_fix = _prefix_genertor(grouping_column)
     if not isinstance(label_to_use,Iterable) or isinstance(label_to_use,str):
         label_to_use = [label_to_use]
         
     outputs = np.zeros((train.shape[0],len(label_to_use)))
     prefixed_labes = [pre_fix+str(label) for label in label_to_use]
-    for train_index, test_index in cv.split(train):
+    for train_index, test_index in cv.split(train,y):
         tmp = _get_posterior(train.iloc[train_index],grouping_column,y[train_index])
         tmp[prefixed_labes] = (tmp[label_to_use].T / tmp.sum(axis=1)).T
         outputs[test_index] = train.iloc[test_index].merge(tmp[prefixed_labes], how = 'left', left_on = grouping_column, right_index=True)[prefixed_labes]
     for i in range(len(prefixed_labes)):
         train[prefixed_labes[i]] = outputs[:,i]
+        if fill_value is not None:
+            train[prefixed_labes[i]].fillna(fill_value,inplace=True)
     if test is not None:
         tmp = _get_posterior(train,grouping_column,y)
         tmp[prefixed_labes] = (tmp[label_to_use].T / tmp.sum(axis=1)).T
         test  = test.merge(tmp[prefixed_labes], how = 'left', left_on = grouping_column, right_index=True)
+        if fill_value is not None:
+            for i in range(len(prefixed_labes)):   
+                test[prefixed_labes[i]].fillna(fill_value,inplace=True)
     return train, test
 
 def _get_grouped(X,grouping_column,method='min'):
