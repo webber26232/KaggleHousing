@@ -31,8 +31,10 @@ def transform_grid_search_cv(estimator,X,y,param_grid,n_jobs=1,cv = None,data_tr
         if data_transformer is not None:
             X_train = data_transformer.fit_transform(X_train,y_train)
             X_test = data_transformer.transform(X_test)
-        
-        out = Parallel(n_jobs=n_jobs)(delayed(_fit_predict)(clone(estimator),X_train,X_test,y_train,parameters) for parameters in params)
+        if n_jobs == 1:
+            out = [_fit_predict(clone(estimator),X_train,X_test,y_train,parameters) for parameters in params]
+        else:
+            out = Parallel(n_jobs=n_jobs)(delayed(_fit_predict)(clone(estimator),X_train,X_test,y_train,parameters) for parameters in params)
         for i in range(len(l)):
             l[i] = np.concatenate([l[i],out[i]])
             count += 1
